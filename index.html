@@ -4,198 +4,223 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visor de Facturas</title>
-  <!-- SheetJS para exportar Excel -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <!-- PDF.js para leer PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
 
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #f0f2f5;
-      color: #1a1a2e;
-      min-height: 100vh;
-    }
-
-    /* ─── HEADER ─── */
+    /* HEADER */
     header {
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #fff;
-      padding: 20px 32px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.35);
+      color: #fff; padding: 18px 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.35); flex-wrap: wrap;
     }
-    header svg { flex-shrink: 0; }
-    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .3px; }
-    header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 1.2rem; font-weight: 700; }
+    header p  { font-size: .75rem; opacity: .65; margin-top: 2px; }
 
-    main { max-width: 1200px; margin: 0 auto; padding: 28px 20px 60px; }
+    /* CONFIG BADGE */
+    #cfg-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.1); border-radius: 8px;
+      padding: 6px 12px; font-size: .78rem; cursor: pointer;
+      transition: background .2s; border: 1px solid rgba(255,255,255,.15);
+    }
+    #cfg-badge:hover { background: rgba(255,255,255,.18); }
+    #cfg-status { width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; flex-shrink: 0; }
+    #cfg-status.ok { background: #2ecc71; }
 
-    /* ─── DROP ZONE ─── */
-    #dropzone {
-      border: 2.5px dashed #4a90d9;
-      border-radius: 14px;
-      background: #fff;
-      text-align: center;
-      padding: 48px 24px;
-      cursor: pointer;
-      transition: background .2s, border-color .2s;
-      position: relative;
-    }
-    #dropzone.drag-over {
-      background: #eaf3ff;
-      border-color: #1a6fc4;
-    }
-    #dropzone input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-    }
-    #dropzone .dz-icon { font-size: 3rem; margin-bottom: 10px; }
-    #dropzone h2 { font-size: 1.05rem; color: #1a6fc4; margin-bottom: 6px; }
-    #dropzone p  { font-size: .82rem; color: #888; }
-    #dropzone .badge {
-      display: inline-block; background: #eaf3ff; color: #1a6fc4;
-      border-radius: 20px; padding: 2px 10px; font-size: .75rem; font-weight: 600;
-      margin: 0 3px;
-    }
+    main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
 
-    /* ─── CONTROLS ─── */
-    .controls {
-      display: flex; justify-content: space-between; align-items: center;
-      margin: 24px 0 12px; flex-wrap: wrap; gap: 10px;
+    /* MODAL CONFIG */
+    .modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 20px;
     }
-    .controls-left { display: flex; gap: 8px; flex-wrap: wrap; }
-    #record-count { font-size: .85rem; color: #666; }
+    .modal-bg.hidden { display: none; }
+    .modal {
+      background: #fff; border-radius: 16px;
+      padding: 32px; max-width: 520px; width: 100%;
+      box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    }
+    .modal h2 { font-size: 1.1rem; margin-bottom: 6px; }
+    .modal p  { font-size: .83rem; color: #666; margin-bottom: 20px; line-height: 1.5; }
+    .modal label { font-size: .82rem; font-weight: 600; display: block; margin-bottom: 5px; color: #333; }
+    .modal input[type="text"], .modal input[type="password"] {
+      width: 100%; border: 1.5px solid #ddd; border-radius: 8px;
+      padding: 9px 12px; font-size: .85rem; margin-bottom: 14px;
+      transition: border-color .15s;
+    }
+    .modal input:focus { outline: none; border-color: #4a90d9; }
+    .modal .hint { font-size: .75rem; color: #999; margin-top: -10px; margin-bottom: 14px; }
+    .modal .hint a { color: #4a90d9; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
 
     button {
       display: inline-flex; align-items: center; gap: 6px;
       border: none; border-radius: 8px; padding: 9px 18px;
-      font-size: .85rem; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s;
+      font-size: .85rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
     }
     button:active { transform: scale(.97); }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-
-    #btn-export {
-      background: linear-gradient(135deg, #217346, #1e8449);
-      color: #fff; box-shadow: 0 2px 8px rgba(33,115,70,.35);
-    }
-    #btn-clear {
-      background: #fff; color: #c0392b; border: 1.5px solid #e8b4b0;
-    }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: #1a1a2e; color: #fff; }
+    .btn-secondary { background: #f0f0f0; color: #444; }
+    #btn-export { background: linear-gradient(135deg,#217346,#1e8449); color: #fff; box-shadow: 0 2px 8px rgba(33,115,70,.3); }
+    #btn-clear  { background: #fff; color: #c0392b; border: 1.5px solid #e8b4b0; }
     #btn-clear:hover { background: #fff5f5; }
 
-    /* ─── TABLE ─── */
-    .table-wrap {
-      background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 2px 16px rgba(0,0,0,.07);
-      overflow-x: auto;
+    /* SYNC STATUS */
+    #sync-bar {
+      background: #fff; border-radius: 10px; padding: 10px 16px;
+      margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+      font-size: .82rem; box-shadow: 0 1px 6px rgba(0,0,0,.07);
     }
+    #sync-bar .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #bbb; flex-shrink: 0; }
+    #sync-bar .sync-dot.ok   { background: #2ecc71; }
+    #sync-bar .sync-dot.busy { background: #f39c12; animation: pulse 1s infinite; }
+    #sync-bar .sync-dot.err  { background: #e74c3c; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    #sync-msg { flex: 1; color: #555; }
+    #sync-time { color: #aaa; font-size: .75rem; }
 
-    table {
-      width: 100%; border-collapse: collapse; font-size: .83rem;
+    /* DROP ZONE */
+    #dropzone {
+      border: 2.5px dashed #4a90d9; border-radius: 14px;
+      background: #fff; text-align: center; padding: 40px 24px;
+      cursor: pointer; transition: background .2s, border-color .2s; position: relative;
+      margin-bottom: 20px;
     }
-    thead th {
-      background: #1a1a2e; color: #fff;
-      padding: 12px 14px; text-align: left;
-      white-space: nowrap; font-weight: 600; letter-spacing: .4px;
-    }
+    #dropzone.drag-over { background: #eaf3ff; border-color: #1a6fc4; }
+    #dropzone.disabled  { opacity: .5; pointer-events: none; }
+    #dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    #dropzone .dz-icon  { font-size: 2.5rem; margin-bottom: 8px; }
+    #dropzone h2 { font-size: 1rem; color: #1a6fc4; margin-bottom: 5px; }
+    #dropzone p  { font-size: .8rem; color: #888; }
+    .badge { display: inline-block; background: #eaf3ff; color: #1a6fc4; border-radius: 20px; padding: 2px 10px; font-size: .75rem; font-weight: 600; margin: 0 3px; }
+
+    #progress-bar-wrap { height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 12px; display: none; }
+    #progress-bar { height: 100%; background: #4a90d9; border-radius: 2px; width: 0; transition: width .2s; }
+
+    /* CONTROLS */
+    .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+    .controls-right { display: flex; gap: 8px; flex-wrap: wrap; }
+    #record-count { font-size: .85rem; color: #666; }
+
+    /* TABLE */
+    .table-wrap { background: #fff; border-radius: 14px; box-shadow: 0 2px 16px rgba(0,0,0,.07); overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    thead th { background: #1a1a2e; color: #fff; padding: 12px 14px; text-align: left; white-space: nowrap; font-weight: 600; letter-spacing: .4px; }
     thead th:first-child { border-radius: 14px 0 0 0; }
     thead th:last-child  { border-radius: 0 14px 0 0; }
-
     tbody tr { border-bottom: 1px solid #f0f0f0; transition: background .15s; }
     tbody tr:hover { background: #f7faff; }
     tbody td { padding: 10px 14px; vertical-align: middle; }
-
-    .tag-mes {
-      display: inline-block; background: #eaf3ff; color: #1a6fc4;
-      border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .78rem;
-    }
+    .tag-mes { display: inline-block; background: #eaf3ff; color: #1a6fc4; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .78rem; }
     .monto { font-weight: 700; color: #217346; font-variant-numeric: tabular-nums; }
-    .folio  { font-family: monospace; font-size: .82rem; }
-
-    /* ─── Editable solicitud ─── */
-    .input-sol {
-      border: 1.5px solid #e0e0e0; border-radius: 6px;
-      padding: 4px 8px; font-size: .82rem; width: 110px;
-      transition: border-color .15s;
-    }
+    .folio { font-family: monospace; font-size: .78rem; }
+    .input-sol { border: 1.5px solid #e0e0e0; border-radius: 6px; padding: 4px 8px; font-size: .82rem; width: 120px; transition: border-color .15s; }
     .input-sol:focus { outline: none; border-color: #4a90d9; }
-
-    /* ─── DELETE row ─── */
-    .btn-del {
-      background: transparent; color: #ccc; padding: 4px 6px; font-size: .9rem;
-      border-radius: 6px;
-    }
+    .btn-del { background: transparent; color: #ccc; padding: 4px 6px; font-size: .9rem; border-radius: 6px; }
     .btn-del:hover { color: #c0392b; background: #fff0f0; }
-
-    /* ─── EMPTY STATE ─── */
-    #empty-state {
-      text-align: center; padding: 48px 20px;
-      color: #bbb; font-size: .9rem;
-    }
+    #empty-state { text-align: center; padding: 48px 20px; color: #bbb; font-size: .9rem; }
     #empty-state .es-icon { font-size: 3rem; margin-bottom: 8px; }
 
-    /* ─── TOAST ─── */
+    /* MONTH FILTER */
+    .filter-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .filter-row label { font-size: .82rem; color: #555; font-weight: 600; }
+    .filter-row select { border: 1.5px solid #ddd; border-radius: 8px; padding: 6px 10px; font-size: .82rem; }
+
+    /* TOAST */
     #toast {
-      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
       background: #1a1a2e; color: #fff; border-radius: 10px;
       padding: 11px 24px; font-size: .85rem; box-shadow: 0 4px 20px rgba(0,0,0,.3);
-      transition: transform .3s ease; z-index: 999; pointer-events: none;
+      transition: transform .3s ease; z-index: 999; pointer-events: none; white-space: nowrap;
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
-
-    /* ─── PROGRESS ─── */
-    #progress-bar-wrap {
-      height: 4px; background: #e0e0e0; border-radius: 2px;
-      margin-top: 12px; display: none;
-    }
-    #progress-bar {
-      height: 100%; background: #4a90d9; border-radius: 2px;
-      width: 0; transition: width .2s;
-    }
-
-    @media (max-width: 600px) {
-      header { padding: 14px 16px; }
-      main { padding: 16px 10px 40px; }
-    }
   </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <header>
-  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="36" height="36" rx="9" fill="#4a90d9" fill-opacity=".25"/>
-    <path d="M10 8h11l7 7v13a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" stroke="#4a90d9" stroke-width="1.8" fill="none"/>
-    <path d="M21 8v7h7" stroke="#4a90d9" stroke-width="1.8"/>
-    <line x1="13" y1="19" x2="23" y2="19" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="13" y1="23" x2="20" y2="23" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/>
-  </svg>
-  <div>
-    <h1>Visor de Facturas</h1>
-    <p>Carga XML (CFDI) o PDF · Exporta a Excel</p>
+  <div class="header-left">
+    <svg width="34" height="34" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#4a90d9" fill-opacity=".25"/><path d="M10 8h11l7 7v13a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" stroke="#4a90d9" stroke-width="1.8" fill="none"/><path d="M21 8v7h7" stroke="#4a90d9" stroke-width="1.8"/><line x1="13" y1="19" x2="23" y2="19" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/><line x1="13" y1="23" x2="20" y2="23" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <div>
+      <h1>Visor de Facturas</h1>
+      <p>Datos sincronizados con GitHub · Exporta a Excel</p>
+    </div>
+  </div>
+  <div id="cfg-badge" onclick="openConfig()">
+    <div id="cfg-status"></div>
+    <span id="cfg-label">Configurar GitHub</span>
   </div>
 </header>
 
+<!-- MODAL CONFIGURACIÓN -->
+<div class="modal-bg" id="modal-config">
+  <div class="modal">
+    <h2>⚙️ Configuración de GitHub</h2>
+    <p>Los datos de tus facturas se guardarán en tu repositorio de GitHub. Solo necesitas configurar esto una vez por dispositivo.</p>
+
+    <label>Usuario de GitHub</label>
+    <input type="text" id="cfg-owner" placeholder="ej: direcciongeneralprocom-svg" />
+
+    <label>Nombre del repositorio</label>
+    <input type="text" id="cfg-repo" placeholder="ej: facturas-zaquetrofa" />
+
+    <label>Token de acceso personal (PAT)</label>
+    <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
+    <p class="hint">
+      Genera tu token en: <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a><br>
+      Selecciona permisos: <strong>repo</strong> (acceso completo al repositorio).<br>
+      El token se guarda solo en este navegador, nunca sale de tu dispositivo.
+    </p>
+
+    <label>Rama</label>
+    <input type="text" id="cfg-branch" placeholder="main" value="main" />
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeConfig()">Cancelar</button>
+      <button class="btn-primary" onclick="saveConfig()">💾 Guardar y conectar</button>
+    </div>
+  </div>
+</div>
+
 <main>
+  <!-- SYNC BAR -->
+  <div id="sync-bar">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-msg">Sin configurar — haz clic en "Configurar GitHub" para empezar</span>
+    <span id="sync-time"></span>
+  </div>
+
   <!-- DROP ZONE -->
-  <div id="dropzone">
+  <div id="dropzone" class="disabled">
     <input type="file" id="file-input" accept=".xml,.pdf" multiple />
     <div class="dz-icon">📄</div>
     <h2>Arrastra tus facturas aquí o haz clic para seleccionar</h2>
-    <p>Formatos aceptados: <span class="badge">XML</span><span class="badge">PDF</span> · Puedes subir varios archivos a la vez</p>
+    <p>Formatos: <span class="badge">XML</span><span class="badge">PDF</span> · Puedes subir varios a la vez</p>
     <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
   </div>
 
   <!-- CONTROLS -->
   <div class="controls">
-    <span id="record-count">0 facturas cargadas</span>
-    <div class="controls-left">
-      <button id="btn-clear" onclick="clearAll()" disabled>🗑 Limpiar todo</button>
+    <div class="filter-row">
+      <span id="record-count">0 facturas</span>
+      <label>Filtrar mes:</label>
+      <select id="filter-month" onchange="renderTable()">
+        <option value="">— Todos —</option>
+      </select>
+    </div>
+    <div class="controls-right">
+      <button id="btn-clear" onclick="clearAll()" disabled>🗑 Limpiar mes</button>
       <button id="btn-export" onclick="exportExcel()" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Exportar Excel
       </button>
     </div>
@@ -203,21 +228,12 @@
 
   <!-- TABLE -->
   <div class="table-wrap">
-    <div id="empty-state">
-      <div class="es-icon">📋</div>
-      <p>Sube facturas para verlas aquí</p>
-    </div>
+    <div id="empty-state"><div class="es-icon">📋</div><p>Sube facturas para verlas aquí</p></div>
     <table id="invoice-table" style="display:none">
       <thead>
         <tr>
-          <th>#</th>
-          <th>Mes</th>
-          <th>N° Solicitud</th>
-          <th>Fecha Factura</th>
-          <th>Folio</th>
-          <th>Razón Social (Receptor)</th>
-          <th>Monto Total</th>
-          <th></th>
+          <th>#</th><th>Mes</th><th>N° Solicitud</th><th>Fecha Factura</th>
+          <th>Folio</th><th>Razón Social (Receptor)</th><th>Monto Total</th><th></th>
         </tr>
       </thead>
       <tbody id="invoice-tbody"></tbody>
@@ -228,87 +244,196 @@
 <div id="toast"></div>
 
 <script>
-  // ── PDF.js worker ──────────────────────────────────────────────
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  // ── State ─────────────────────────────────────────────────────
-  let rows = [];
-
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const DATA_FILE = 'facturas.json';
 
-  // ── Drag & drop ───────────────────────────────────────────────
+  let rows = [];       // todos los registros (de todos los meses)
+  let ghConfig = null; // { owner, repo, token, branch }
+  let fileSHA  = null; // SHA del archivo en GitHub (necesario para actualizar)
+
+  // ── INIT ──────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    loadConfig();
+    if (ghConfig) {
+      updateConfigBadge(true);
+      enableDropzone(true);
+      loadFromGitHub();
+    }
+  });
+
+  // ── CONFIG ────────────────────────────────────────────────────
+  function loadConfig() {
+    const raw = localStorage.getItem('gh_cfg');
+    if (raw) { try { ghConfig = JSON.parse(raw); } catch(e) {} }
+  }
+  function saveConfig() {
+    const owner  = document.getElementById('cfg-owner').value.trim();
+    const repo   = document.getElementById('cfg-repo').value.trim();
+    const token  = document.getElementById('cfg-token').value.trim();
+    const branch = document.getElementById('cfg-branch').value.trim() || 'main';
+    if (!owner || !repo || !token) { toast('⚠️ Completa todos los campos'); return; }
+    ghConfig = { owner, repo, token, branch };
+    localStorage.setItem('gh_cfg', JSON.stringify(ghConfig));
+    closeConfig();
+    updateConfigBadge(true);
+    enableDropzone(true);
+    loadFromGitHub();
+  }
+  function openConfig() {
+    if (ghConfig) {
+      document.getElementById('cfg-owner').value  = ghConfig.owner;
+      document.getElementById('cfg-repo').value   = ghConfig.repo;
+      document.getElementById('cfg-token').value  = ghConfig.token;
+      document.getElementById('cfg-branch').value = ghConfig.branch;
+    }
+    document.getElementById('modal-config').classList.remove('hidden');
+  }
+  function closeConfig() {
+    document.getElementById('modal-config').classList.add('hidden');
+  }
+  function updateConfigBadge(ok) {
+    document.getElementById('cfg-status').className = ok ? 'ok' : '';
+    document.getElementById('cfg-label').textContent = ok
+      ? `${ghConfig.owner}/${ghConfig.repo}`
+      : 'Configurar GitHub';
+  }
+  function enableDropzone(on) {
+    document.getElementById('dropzone').classList.toggle('disabled', !on);
+  }
+
+  // ── GITHUB API ────────────────────────────────────────────────
+  function ghHeaders() {
+    return {
+      'Authorization': `token ${ghConfig.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    };
+  }
+  function ghUrl() {
+    const { owner, repo, branch } = ghConfig;
+    return `https://api.github.com/repos/${owner}/${repo}/contents/${DATA_FILE}?ref=${branch}`;
+  }
+
+  async function loadFromGitHub() {
+    setSyncStatus('busy', 'Cargando datos desde GitHub…');
+    try {
+      const res = await fetch(ghUrl(), { headers: ghHeaders() });
+      if (res.status === 404) {
+        // Archivo no existe aún, empezamos vacío
+        fileSHA = null; rows = [];
+        setSyncStatus('ok', 'Repositorio conectado · Sin facturas aún');
+        renderTable(); return;
+      }
+      if (!res.ok) throw new Error(`GitHub: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      fileSHA = data.sha;
+      const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+      rows = JSON.parse(decoded);
+      setSyncStatus('ok', `Datos cargados · ${rows.length} factura${rows.length!==1?'s':''} en total`);
+      renderTable();
+    } catch(err) {
+      setSyncStatus('err', `Error al cargar: ${err.message}`);
+      toast('❌ ' + err.message);
+    }
+  }
+
+  async function saveToGitHub() {
+    if (!ghConfig) return;
+    setSyncStatus('busy', 'Guardando en GitHub…');
+    try {
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(rows, null, 2))));
+      const body = {
+        message: `Actualizar facturas ${new Date().toLocaleDateString('es-MX')}`,
+        content,
+        branch: ghConfig.branch,
+        ...(fileSHA ? { sha: fileSHA } : {})
+      };
+      const res = await fetch(ghUrl(), {
+        method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.message || res.statusText);
+      }
+      const data = await res.json();
+      fileSHA = data.content.sha;
+      const now = new Date();
+      setSyncStatus('ok',
+        `Guardado correctamente`,
+        `${now.toLocaleDateString('es-MX')} ${now.toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit'})}`
+      );
+      toast('✅ Guardado en GitHub');
+    } catch(err) {
+      setSyncStatus('err', `Error al guardar: ${err.message}`);
+      toast('❌ ' + err.message);
+    }
+  }
+
+  function setSyncStatus(state, msg, time='') {
+    document.getElementById('sync-dot').className = 'sync-dot ' + state;
+    document.getElementById('sync-msg').textContent = msg;
+    document.getElementById('sync-time').textContent = time;
+  }
+
+  // ── DRAG & DROP ───────────────────────────────────────────────
   const dz = document.getElementById('dropzone');
-  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragover',  e => { e.preventDefault(); if(!dz.classList.contains('disabled')) dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
   dz.addEventListener('drop', e => {
     e.preventDefault(); dz.classList.remove('drag-over');
-    processFiles([...e.dataTransfer.files]);
+    if(!dz.classList.contains('disabled')) processFiles([...e.dataTransfer.files]);
   });
   document.getElementById('file-input').addEventListener('change', e => {
-    processFiles([...e.target.files]);
-    e.target.value = '';
+    processFiles([...e.target.files]); e.target.value = '';
   });
 
-  // ── File processing ───────────────────────────────────────────
+  // ── FILE PROCESSING ───────────────────────────────────────────
   async function processFiles(files) {
     if (!files.length) return;
     const pb = document.getElementById('progress-bar');
     const pbw = document.getElementById('progress-bar-wrap');
     pbw.style.display = 'block'; pb.style.width = '0%';
-
-    let done = 0;
+    let added = 0, done = 0;
     for (const f of files) {
       try {
         let row = null;
-        if (f.name.toLowerCase().endsWith('.xml')) {
-          row = await parseXML(f);
-        } else if (f.name.toLowerCase().endsWith('.pdf')) {
-          row = await parsePDF(f);
-        } else {
-          toast(`⚠️ Formato no soportado: ${f.name}`);
-        }
-        if (row) { row.fileName = f.name; rows.push(row); }
-      } catch(err) {
-        toast(`❌ Error en ${f.name}: ${err.message}`);
-      }
+        if (f.name.toLowerCase().endsWith('.xml'))      row = await parseXML(f);
+        else if (f.name.toLowerCase().endsWith('.pdf')) row = await parsePDF(f);
+        else toast(`⚠️ No soportado: ${f.name}`);
+        if (row) { row.id = Date.now() + '_' + Math.random().toString(36).slice(2); rows.push(row); added++; }
+      } catch(err) { toast(`❌ Error en ${f.name}: ${err.message}`); }
       done++;
       pb.style.width = (done / files.length * 100) + '%';
     }
     setTimeout(() => { pbw.style.display = 'none'; pb.style.width = '0'; }, 600);
-    renderTable();
-    if (files.length > 1) toast(`✅ ${files.length} archivos procesados`);
+    if (added > 0) {
+      renderTable();
+      await saveToGitHub();
+      if (files.length > 1) toast(`✅ ${added} factura${added!==1?'s':''} agregada${added!==1?'s':''}`);
+    }
   }
 
-  // ── XML (CFDI) parser ─────────────────────────────────────────
+  // ── XML PARSER ────────────────────────────────────────────────
   function parseXML(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(e.target.result, 'application/xml');
-
-          // Namespaces: cfdi:Comprobante o Comprobante sin ns
+          const doc = new DOMParser().parseFromString(e.target.result, 'application/xml');
           const comp = doc.querySelector('Comprobante');
-          if (!comp) return reject(new Error('No se encontró el nodo Comprobante'));
-
-          const fecha  = comp.getAttribute('Fecha') || comp.getAttribute('fecha') || '';
-          const folio  = comp.getAttribute('Folio') || comp.getAttribute('folio') || '—';
-          const total  = comp.getAttribute('Total') || comp.getAttribute('total') || '0';
-
-          // Receptor
+          if (!comp) return reject(new Error('Nodo Comprobante no encontrado'));
+          const fecha = comp.getAttribute('Fecha') || '';
+          const folio = comp.getAttribute('Folio') || '—';
+          const total = parseFloat(comp.getAttribute('Total') || '0') || 0;
           const receptor = doc.querySelector('Receptor');
-          const razon = receptor
-            ? (receptor.getAttribute('Nombre') || receptor.getAttribute('nombre') || '—')
-            : '—';
-
+          const razon = receptor ? (receptor.getAttribute('Nombre') || '—') : '—';
           const dateObj = fecha ? new Date(fecha) : null;
-          const mes  = dateObj ? MESES[dateObj.getMonth()] : '—';
-          const fmtFecha = dateObj ? formatDate(dateObj) : fecha;
-
-          resolve({ mes, solicitud: '', fecha: fmtFecha, folio, razon, total: parseFloat(total) || 0 });
+          const mes = dateObj ? MESES[dateObj.getMonth()] + ' ' + dateObj.getFullYear() : '—';
+          resolve({ mes, solicitud: '', fecha: dateObj ? formatDate(dateObj) : fecha, folio, razon, total, fileName: file.name });
         } catch(err) { reject(err); }
       };
       reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
@@ -316,166 +441,141 @@
     });
   }
 
-  // ── PDF parser (text extraction + heuristics) ─────────────────
+  // ── PDF PARSER ────────────────────────────────────────────────
   async function parsePDF(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf  = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const ab  = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
     let text = '';
     for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-      const page  = await pdf.getPage(i);
-      const cont  = await page.getTextContent();
+      const page = await pdf.getPage(i);
+      const cont = await page.getTextContent();
       text += cont.items.map(it => it.str).join(' ') + '\n';
     }
-
-    // Heurísticas para facturas mexicanas típicas
-    const fecha  = extractPDFDate(text);
-    const folio  = extractPDFField(text, /(?:Folio\s*:?\s*|UUID\s*:?\s*)([A-Z0-9\-]{6,})/i) || '—';
-    const razon  = extractPDFField(text, /(?:Receptor\s*:?\s*|Nombre del receptor\s*:?\s*)([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ ,\.&]+)/i)
-                || extractPDFField(text, /(?:Razón Social\s*:?\s*)([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ ,\.&]+)/i)
-                || '— (revisa el PDF)';
-    const total  = extractPDFAmount(text);
-
+    const fecha = extractPDFDate(text);
+    const folio = extractPDFField(text, /(?:Folio\s*:?\s*|UUID\s*:?\s*)([A-Z0-9\-]{6,})/i) || '—';
+    const razon = extractPDFField(text, /(?:Receptor\s*:?\s*|Nombre del receptor\s*:?\s*|Razón Social\s*:?\s*)([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ ,\.&]+)/i) || '— (verificar)';
+    const total = extractPDFAmount(text);
     const dateObj = fecha ? new Date(fecha) : null;
-    const mes = dateObj && !isNaN(dateObj) ? MESES[dateObj.getMonth()] : '—';
-    const fmtFecha = dateObj && !isNaN(dateObj) ? formatDate(dateObj) : (fecha || '—');
-
-    return { mes, solicitud: '', fecha: fmtFecha, folio, razon, total };
+    const mes = (dateObj && !isNaN(dateObj)) ? MESES[dateObj.getMonth()] + ' ' + dateObj.getFullYear() : '—';
+    return { mes, solicitud: '', fecha: (dateObj && !isNaN(dateObj)) ? formatDate(dateObj) : (fecha || '—'), folio, razon, total, fileName: file.name };
   }
-
-  function extractPDFDate(text) {
-    // ISO: 2024-05-10  o  10/05/2024  o  10-05-2024
-    const m1 = text.match(/(\d{4}-\d{2}-\d{2})/);
-    if (m1) return m1[1];
-    const m2 = text.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
-    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+  function extractPDFDate(t) {
+    const m1 = t.match(/(\d{4}-\d{2}-\d{2})/); if (m1) return m1[1];
+    const m2 = t.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/); if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
     return null;
   }
-  function extractPDFField(text, regex) {
-    const m = text.match(regex);
-    return m ? m[1].trim() : null;
-  }
-  function extractPDFAmount(text) {
-    // Busca patrones como "Total $1,234.56" o "Importe total 1234.56"
-    const m = text.match(/(?:total|importe total|monto total)\s*\$?\s*([\d,]+\.?\d{0,2})/i);
+  function extractPDFField(t, re) { const m = t.match(re); return m ? m[1].trim() : null; }
+  function extractPDFAmount(t) {
+    const m = t.match(/(?:total|importe total|monto total)\s*\$?\s*([\d,]+\.?\d{0,2})/i);
     if (m) return parseFloat(m[1].replace(/,/g,'')) || 0;
-    // fallback: mayor número con decimales en el texto
-    const nums = [...text.matchAll(/([\d]{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2})/g)]
-      .map(x => parseFloat(x[1].replace(/,/g,'')));
+    const nums = [...t.matchAll(/([\d]{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2})/g)].map(x => parseFloat(x[1].replace(/,/g,'')));
     return nums.length ? Math.max(...nums) : 0;
   }
 
-  // ── Helpers ───────────────────────────────────────────────────
-  function formatDate(d) {
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  // ── HELPERS ───────────────────────────────────────────────────
+  function formatDate(d) { return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+  function pad(n) { return String(n).padStart(2,'0'); }
+  function formatMoney(n) { return '$' + n.toLocaleString('es-MX', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function escHtml(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── RENDER ────────────────────────────────────────────────────
+  function getFilteredRows() {
+    const mes = document.getElementById('filter-month').value;
+    return mes ? rows.filter(r => r.mes === mes) : rows;
   }
-  function formatMoney(n) {
-    return '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function updateMonthFilter() {
+    const sel = document.getElementById('filter-month');
+    const current = sel.value;
+    const meses = [...new Set(rows.map(r => r.mes))].filter(Boolean).sort();
+    sel.innerHTML = '<option value="">— Todos —</option>' + meses.map(m => `<option value="${escHtml(m)}">${escHtml(m)}</option>`).join('');
+    if (meses.includes(current)) sel.value = current;
   }
 
-  // ── Render ────────────────────────────────────────────────────
   function renderTable() {
+    updateMonthFilter();
+    const filtered = getFilteredRows();
     const empty = document.getElementById('empty-state');
     const table = document.getElementById('invoice-table');
     const tbody = document.getElementById('invoice-tbody');
-    const count = document.getElementById('record-count');
-    const btnExp = document.getElementById('btn-export');
-    const btnClr = document.getElementById('btn-clear');
+    document.getElementById('record-count').textContent = `${filtered.length} factura${filtered.length!==1?'s':''} (${rows.length} total)`;
+    document.getElementById('btn-export').disabled = filtered.length === 0;
+    document.getElementById('btn-clear').disabled  = rows.length === 0;
 
-    count.textContent = `${rows.length} factura${rows.length !== 1 ? 's' : ''} cargada${rows.length !== 1 ? 's' : ''}`;
-    btnExp.disabled = rows.length === 0;
-    btnClr.disabled = rows.length === 0;
-
-    if (rows.length === 0) {
-      empty.style.display = 'block';
-      table.style.display = 'none';
-      return;
+    if (filtered.length === 0) {
+      empty.style.display = 'block'; table.style.display = 'none'; return;
     }
-    empty.style.display = 'none';
-    table.style.display = 'table';
-
+    empty.style.display = 'none'; table.style.display = 'table';
     tbody.innerHTML = '';
-    rows.forEach((r, i) => {
+    filtered.forEach((r, i) => {
+      const globalIdx = rows.indexOf(r);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="color:#aaa;font-size:.78rem">${i + 1}</td>
-        <td><span class="tag-mes">${r.mes}</span></td>
+        <td style="color:#aaa;font-size:.78rem">${i+1}</td>
+        <td><span class="tag-mes">${escHtml(r.mes)}</span></td>
         <td><input class="input-sol" type="text" placeholder="N° solicitud"
              value="${escHtml(r.solicitud)}"
-             oninput="rows[${i}].solicitud=this.value" /></td>
+             onchange="rows[${globalIdx}].solicitud=this.value; debounceSave();" /></td>
         <td>${escHtml(r.fecha)}</td>
-        <td class="folio">${escHtml(r.folio)}</td>
-        <td title="${escHtml(r.razon)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.razon)}</td>
+        <td class="folio" title="${escHtml(r.folio)}">${escHtml(r.folio.length>20?r.folio.substring(0,20)+'…':r.folio)}</td>
+        <td title="${escHtml(r.razon)}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.razon)}</td>
         <td class="monto">${formatMoney(r.total)}</td>
-        <td><button class="btn-del" title="Eliminar" onclick="deleteRow(${i})">✕</button></td>
+        <td><button class="btn-del" title="Eliminar" onclick="deleteRow('${r.id}')">✕</button></td>
       `;
       tbody.appendChild(tr);
     });
   }
 
-  function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Debounce para no guardar en GitHub con cada tecla
+  let saveTimer;
+  function debounceSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveToGitHub(), 1500);
   }
 
-  function deleteRow(i) {
-    rows.splice(i, 1);
+  async function deleteRow(id) {
+    if (!confirm('¿Eliminar esta factura?')) return;
+    rows = rows.filter(r => r.id !== id);
     renderTable();
+    await saveToGitHub();
   }
 
-  function clearAll() {
-    if (!rows.length) return;
-    if (!confirm('¿Eliminar todas las facturas cargadas?')) return;
-    rows = [];
+  async function clearAll() {
+    const mes = document.getElementById('filter-month').value;
+    const label = mes ? `las facturas de ${mes}` : 'TODAS las facturas';
+    if (!confirm(`¿Eliminar ${label}? Esta acción no se puede deshacer.`)) return;
+    rows = mes ? rows.filter(r => r.mes !== mes) : [];
+    document.getElementById('filter-month').value = '';
     renderTable();
+    await saveToGitHub();
   }
 
-  // ── Export Excel ──────────────────────────────────────────────
+  // ── EXPORT EXCEL ──────────────────────────────────────────────
   function exportExcel() {
-    if (!rows.length) return;
-
+    const filtered = getFilteredRows();
+    if (!filtered.length) return;
     const wb = XLSX.utils.book_new();
-
-    // Encabezados
     const header = ['Mes', 'N° Solicitud', 'Fecha Factura', 'Folio Factura', 'Razón Social (Receptor)', 'Monto Total'];
-    const data = rows.map(r => [r.mes, r.solicitud, r.fecha, r.folio, r.razon, r.total]);
-
+    const data = filtered.map(r => [r.mes, r.solicitud, r.fecha, r.folio, r.razon, r.total]);
     const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
-
-    // Anchos de columna
-    ws['!cols'] = [
-      { wch: 12 }, // Mes
-      { wch: 16 }, // Solicitud
-      { wch: 16 }, // Fecha
-      { wch: 42 }, // Folio (UUID)
-      { wch: 36 }, // Razón Social
-      { wch: 16 }, // Monto
-    ];
-
-    // Formato moneda para la columna Monto (columna F, índice 5)
+    ws['!cols'] = [{wch:18},{wch:16},{wch:16},{wch:42},{wch:36},{wch:16}];
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = 1; R <= range.e.r; R++) {
-      const cell = ws[XLSX.utils.encode_cell({ r: R, c: 5 })];
-      if (cell && typeof cell.v === 'number') {
-        cell.z = '"$"#,##0.00';
-        cell.t = 'n';
-      }
+      const cell = ws[XLSX.utils.encode_cell({r:R,c:5})];
+      if (cell && typeof cell.v === 'number') { cell.z = '"$"#,##0.00'; cell.t = 'n'; }
     }
-
     XLSX.utils.book_append_sheet(wb, ws, 'Facturas');
-
-    const ts = new Date();
-    const fname = `facturas_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}.xlsx`;
-    XLSX.writeFile(wb, fname);
-    toast('✅ Excel descargado correctamente');
+    const mes = document.getElementById('filter-month').value.replace(/\s/g,'_') || 'todas';
+    XLSX.writeFile(wb, `facturas_${mes}.xlsx`);
+    toast('✅ Excel descargado');
   }
 
-  // ── Toast ─────────────────────────────────────────────────────
+  // ── TOAST ─────────────────────────────────────────────────────
   let toastTimer;
   function toast(msg) {
     const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('show');
+    el.textContent = msg; el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
   }
 </script>
 </body>
