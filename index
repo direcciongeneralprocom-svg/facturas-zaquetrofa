@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visor de Facturas</title>
+  <!-- SheetJS para exportar Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- PDF.js para leer PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.35);
+    }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .3px; }
+    header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 28px 20px 60px; }
+
+    /* ─── DROP ZONE ─── */
+    #dropzone {
+      border: 2.5px dashed #4a90d9;
+      border-radius: 14px;
+      background: #fff;
+      text-align: center;
+      padding: 48px 24px;
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+      position: relative;
+    }
+    #dropzone.drag-over {
+      background: #eaf3ff;
+      border-color: #1a6fc4;
+    }
+    #dropzone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #dropzone .dz-icon { font-size: 3rem; margin-bottom: 10px; }
+    #dropzone h2 { font-size: 1.05rem; color: #1a6fc4; margin-bottom: 6px; }
+    #dropzone p  { font-size: .82rem; color: #888; }
+    #dropzone .badge {
+      display: inline-block; background: #eaf3ff; color: #1a6fc4;
+      border-radius: 20px; padding: 2px 10px; font-size: .75rem; font-weight: 600;
+      margin: 0 3px;
+    }
+
+    /* ─── CONTROLS ─── */
+    .controls {
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 24px 0 12px; flex-wrap: wrap; gap: 10px;
+    }
+    .controls-left { display: flex; gap: 8px; flex-wrap: wrap; }
+    #record-count { font-size: .85rem; color: #666; }
+
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: none; border-radius: 8px; padding: 9px 18px;
+      font-size: .85rem; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    #btn-export {
+      background: linear-gradient(135deg, #217346, #1e8449);
+      color: #fff; box-shadow: 0 2px 8px rgba(33,115,70,.35);
+    }
+    #btn-clear {
+      background: #fff; color: #c0392b; border: 1.5px solid #e8b4b0;
+    }
+    #btn-clear:hover { background: #fff5f5; }
+
+    /* ─── TABLE ─── */
+    .table-wrap {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.07);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%; border-collapse: collapse; font-size: .83rem;
+    }
+    thead th {
+      background: #1a1a2e; color: #fff;
+      padding: 12px 14px; text-align: left;
+      white-space: nowrap; font-weight: 600; letter-spacing: .4px;
+    }
+    thead th:first-child { border-radius: 14px 0 0 0; }
+    thead th:last-child  { border-radius: 0 14px 0 0; }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background .15s; }
+    tbody tr:hover { background: #f7faff; }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+
+    .tag-mes {
+      display: inline-block; background: #eaf3ff; color: #1a6fc4;
+      border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .78rem;
+    }
+    .monto { font-weight: 700; color: #217346; font-variant-numeric: tabular-nums; }
+    .folio  { font-family: monospace; font-size: .82rem; }
+
+    /* ─── Editable solicitud ─── */
+    .input-sol {
+      border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 4px 8px; font-size: .82rem; width: 110px;
+      transition: border-color .15s;
+    }
+    .input-sol:focus { outline: none; border-color: #4a90d9; }
+
+    /* ─── DELETE row ─── */
+    .btn-del {
+      background: transparent; color: #ccc; padding: 4px 6px; font-size: .9rem;
+      border-radius: 6px;
+    }
+    .btn-del:hover { color: #c0392b; background: #fff0f0; }
+
+    /* ─── EMPTY STATE ─── */
+    #empty-state {
+      text-align: center; padding: 48px 20px;
+      color: #bbb; font-size: .9rem;
+    }
+    #empty-state .es-icon { font-size: 3rem; margin-bottom: 8px; }
+
+    /* ─── TOAST ─── */
+    #toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: #fff; border-radius: 10px;
+      padding: 11px 24px; font-size: .85rem; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+      transition: transform .3s ease; z-index: 999; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── PROGRESS ─── */
+    #progress-bar-wrap {
+      height: 4px; background: #e0e0e0; border-radius: 2px;
+      margin-top: 12px; display: none;
+    }
+    #progress-bar {
+      height: 100%; background: #4a90d9; border-radius: 2px;
+      width: 0; transition: width .2s;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 14px 16px; }
+      main { padding: 16px 10px 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="36" height="36" rx="9" fill="#4a90d9" fill-opacity=".25"/>
+    <path d="M10 8h11l7 7v13a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" stroke="#4a90d9" stroke-width="1.8" fill="none"/>
+    <path d="M21 8v7h7" stroke="#4a90d9" stroke-width="1.8"/>
+    <line x1="13" y1="19" x2="23" y2="19" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="13" y1="23" x2="20" y2="23" stroke="#a8c8f5" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <div>
+    <h1>Visor de Facturas</h1>
+    <p>Carga XML (CFDI) o PDF · Exporta a Excel</p>
+  </div>
+</header>
+
+<main>
+  <!-- DROP ZONE -->
+  <div id="dropzone">
+    <input type="file" id="file-input" accept=".xml,.pdf" multiple />
+    <div class="dz-icon">📄</div>
+    <h2>Arrastra tus facturas aquí o haz clic para seleccionar</h2>
+    <p>Formatos aceptados: <span class="badge">XML</span><span class="badge">PDF</span> · Puedes subir varios archivos a la vez</p>
+    <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <span id="record-count">0 facturas cargadas</span>
+    <div class="controls-left">
+      <button id="btn-clear" onclick="clearAll()" disabled>🗑 Limpiar todo</button>
+      <button id="btn-export" onclick="exportExcel()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        Exportar Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <div id="empty-state">
+      <div class="es-icon">📋</div>
+      <p>Sube facturas para verlas aquí</p>
+    </div>
+    <table id="invoice-table" style="display:none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Mes</th>
+          <th>N° Solicitud</th>
+          <th>Fecha Factura</th>
+          <th>Folio</th>
+          <th>Razón Social (Receptor)</th>
+          <th>Monto Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="invoice-tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ── PDF.js worker ──────────────────────────────────────────────
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── State ─────────────────────────────────────────────────────
+  let rows = [];
+
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // ── Drag & drop ───────────────────────────────────────────────
+  const dz = document.getElementById('dropzone');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    processFiles([...e.dataTransfer.files]);
+  });
+  document.getElementById('file-input').addEventListener('change', e => {
+    processFiles([...e.target.files]);
+    e.target.value = '';
+  });
+
+  // ── File processing ───────────────────────────────────────────
+  async function processFiles(files) {
+    if (!files.length) return;
+    const pb = document.getElementById('progress-bar');
+    const pbw = document.getElementById('progress-bar-wrap');
+    pbw.style.display = 'block'; pb.style.width = '0%';
+
+    let done = 0;
+    for (const f of files) {
+      try {
+        let row = null;
+        if (f.name.toLowerCase().endsWith('.xml')) {
+          row = await parseXML(f);
+        } else if (f.name.toLowerCase().endsWith('.pdf')) {
+          row = await parsePDF(f);
+        } else {
+          toast(`⚠️ Formato no soportado: ${f.name}`);
+        }
+        if (row) { row.fileName = f.name; rows.push(row); }
+      } catch(err) {
+        toast(`❌ Error en ${f.name}: ${err.message}`);
+      }
+      done++;
+      pb.style.width = (done / files.length * 100) + '%';
+    }
+    setTimeout(() => { pbw.style.display = 'none'; pb.style.width = '0'; }, 600);
+    renderTable();
+    if (files.length > 1) toast(`✅ ${files.length} archivos procesados`);
+  }
+
+  // ── XML (CFDI) parser ─────────────────────────────────────────
+  function parseXML(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(e.target.result, 'application/xml');
+
+          // Namespaces: cfdi:Comprobante o Comprobante sin ns
+          const comp = doc.querySelector('Comprobante');
+          if (!comp) return reject(new Error('No se encontró el nodo Comprobante'));
+
+          const fecha  = comp.getAttribute('Fecha') || comp.getAttribute('fecha') || '';
+          const folio  = comp.getAttribute('Folio') || comp.getAttribute('folio') || '—';
+          const total  = comp.getAttribute('Total') || comp.getAttribute('total') || '0';
+
+          // Receptor
+          const receptor = doc.querySelector('Receptor');
+          const razon = receptor
+            ? (receptor.getAttribute('Nombre') || receptor.getAttribute('nombre') || '—')
+            : '—';
+
+          const dateObj = fecha ? new Date(fecha) : null;
+          const mes  = dateObj ? MESES[dateObj.getMonth()] : '—';
+          const fmtFecha = dateObj ? formatDate(dateObj) : fecha;
+
+          resolve({ mes, solicitud: '', fecha: fmtFecha, folio, razon, total: parseFloat(total) || 0 });
+        } catch(err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  // ── PDF parser (text extraction + heuristics) ─────────────────
+  async function parsePDF(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf  = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+      const page  = await pdf.getPage(i);
+      const cont  = await page.getTextContent();
+      text += cont.items.map(it => it.str).join(' ') + '\n';
+    }
+
+    // Heurísticas para facturas mexicanas típicas
+    const fecha  = extractPDFDate(text);
+    const folio  = extractPDFField(text, /(?:Folio\s*:?\s*|UUID\s*:?\s*)([A-Z0-9\-]{6,})/i) || '—';
+    const razon  = extractPDFField(text, /(?:Receptor\s*:?\s*|Nombre del receptor\s*:?\s*)([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ ,\.&]+)/i)
+                || extractPDFField(text, /(?:Razón Social\s*:?\s*)([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ ,\.&]+)/i)
+                || '— (revisa el PDF)';
+    const total  = extractPDFAmount(text);
+
+    const dateObj = fecha ? new Date(fecha) : null;
+    const mes = dateObj && !isNaN(dateObj) ? MESES[dateObj.getMonth()] : '—';
+    const fmtFecha = dateObj && !isNaN(dateObj) ? formatDate(dateObj) : (fecha || '—');
+
+    return { mes, solicitud: '', fecha: fmtFecha, folio, razon, total };
+  }
+
+  function extractPDFDate(text) {
+    // ISO: 2024-05-10  o  10/05/2024  o  10-05-2024
+    const m1 = text.match(/(\d{4}-\d{2}-\d{2})/);
+    if (m1) return m1[1];
+    const m2 = text.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    return null;
+  }
+  function extractPDFField(text, regex) {
+    const m = text.match(regex);
+    return m ? m[1].trim() : null;
+  }
+  function extractPDFAmount(text) {
+    // Busca patrones como "Total $1,234.56" o "Importe total 1234.56"
+    const m = text.match(/(?:total|importe total|monto total)\s*\$?\s*([\d,]+\.?\d{0,2})/i);
+    if (m) return parseFloat(m[1].replace(/,/g,'')) || 0;
+    // fallback: mayor número con decimales en el texto
+    const nums = [...text.matchAll(/([\d]{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2})/g)]
+      .map(x => parseFloat(x[1].replace(/,/g,'')));
+    return nums.length ? Math.max(...nums) : 0;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function formatDate(d) {
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
+  function formatMoney(n) {
+    return '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ── Render ────────────────────────────────────────────────────
+  function renderTable() {
+    const empty = document.getElementById('empty-state');
+    const table = document.getElementById('invoice-table');
+    const tbody = document.getElementById('invoice-tbody');
+    const count = document.getElementById('record-count');
+    const btnExp = document.getElementById('btn-export');
+    const btnClr = document.getElementById('btn-clear');
+
+    count.textContent = `${rows.length} factura${rows.length !== 1 ? 's' : ''} cargada${rows.length !== 1 ? 's' : ''}`;
+    btnExp.disabled = rows.length === 0;
+    btnClr.disabled = rows.length === 0;
+
+    if (rows.length === 0) {
+      empty.style.display = 'block';
+      table.style.display = 'none';
+      return;
+    }
+    empty.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = '';
+    rows.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:#aaa;font-size:.78rem">${i + 1}</td>
+        <td><span class="tag-mes">${r.mes}</span></td>
+        <td><input class="input-sol" type="text" placeholder="N° solicitud"
+             value="${escHtml(r.solicitud)}"
+             oninput="rows[${i}].solicitud=this.value" /></td>
+        <td>${escHtml(r.fecha)}</td>
+        <td class="folio">${escHtml(r.folio)}</td>
+        <td title="${escHtml(r.razon)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.razon)}</td>
+        <td class="monto">${formatMoney(r.total)}</td>
+        <td><button class="btn-del" title="Eliminar" onclick="deleteRow(${i})">✕</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function deleteRow(i) {
+    rows.splice(i, 1);
+    renderTable();
+  }
+
+  function clearAll() {
+    if (!rows.length) return;
+    if (!confirm('¿Eliminar todas las facturas cargadas?')) return;
+    rows = [];
+    renderTable();
+  }
+
+  // ── Export Excel ──────────────────────────────────────────────
+  function exportExcel() {
+    if (!rows.length) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // Encabezados
+    const header = ['Mes', 'N° Solicitud', 'Fecha Factura', 'Folio Factura', 'Razón Social (Receptor)', 'Monto Total'];
+    const data = rows.map(r => [r.mes, r.solicitud, r.fecha, r.folio, r.razon, r.total]);
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+
+    // Anchos de columna
+    ws['!cols'] = [
+      { wch: 12 }, // Mes
+      { wch: 16 }, // Solicitud
+      { wch: 16 }, // Fecha
+      { wch: 42 }, // Folio (UUID)
+      { wch: 36 }, // Razón Social
+      { wch: 16 }, // Monto
+    ];
+
+    // Formato moneda para la columna Monto (columna F, índice 5)
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = 1; R <= range.e.r; R++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: 5 })];
+      if (cell && typeof cell.v === 'number') {
+        cell.z = '"$"#,##0.00';
+        cell.t = 'n';
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Facturas');
+
+    const ts = new Date();
+    const fname = `facturas_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}.xlsx`;
+    XLSX.writeFile(wb, fname);
+    toast('✅ Excel descargado correctamente');
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>
