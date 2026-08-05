@@ -162,7 +162,7 @@
 </header>
 
 <!-- MODAL CONFIGURACIÓN -->
-<div class="modal-bg" id="modal-config">
+<div class="modal-bg hidden" id="modal-config">
   <div class="modal">
     <h2>⚙️ Configuración de GitHub</h2>
     <p>Los datos de tus facturas se guardarán en tu repositorio de GitHub. Solo necesitas configurar esto una vez por dispositivo.</p>
@@ -262,6 +262,9 @@
       updateConfigBadge(true);
       enableDropzone(true);
       loadFromGitHub();
+    } else {
+      // Primera vez: abrir config automáticamente
+      openConfig();
     }
   });
 
